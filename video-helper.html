@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Helper - CMYK Extractor</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background-color: #f8f9fa;
+      padding: 20px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+    
+    h1, h2 {
+      color: #2c3e50;
+    }
+    
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    .card {
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    
+    canvas {
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      max-width: 100%;
+      background-color: #000;
+    }
+    
+    button {
+      padding: 10px 20px;
+      background-color: #3498db;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      min-width: 150px;
+      transition: background-color 0.2s;
+    }
+    
+    button:hover {
+      background-color: #2980b9;
+    }
+    
+    .info {
+      background-color: #e8f4fc;
+      border-left: 4px solid #3498db;
+      padding: 12px 20px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    
+    video {
+      max-width: 100%;
+      border-radius: 4px;
+    }
+    
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin: 10px 0;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>CMYK Video Helper</h1>
+    
+    <div class="info">
+      <p>This tool can generate test videos for the CMYK Channel Extractor. You can create color test patterns and download them as WebM videos.</p>
+    </div>
+    
+    <div class="card">
+      <h2>Generate Test Pattern</h2>
+      <canvas id="testCanvas" width="640" height="360"></canvas>
+      <div class="controls">
+        <button id="generateRGBBtn">RGB Test Pattern</button>
+        <button id="generateCMYBtn">CMY Test Pattern</button>
+        <button id="generateGradientBtn">Color Gradient</button>
+      </div>
+      <div>
+        <video id="testVideo" controls></video>
+      </div>
+      <div class="controls">
+        <button id="createVideoBtn" disabled>Create Video</button>
+        <button id="downloadBtn" disabled>Download Video</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // DOM elements
+    const testCanvas = document.getElementById('testCanvas');
+    const ctx = testCanvas.getContext('2d');
+    const testVideo = document.getElementById('testVideo');
+    const generateRGBBtn = document.getElementById('generateRGBBtn');
+    const generateCMYBtn = document.getElementById('generateCMYBtn');
+    const generateGradientBtn = document.getElementById('generateGradientBtn');
+    const createVideoBtn = document.getElementById('createVideoBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    
+    // Recorder and stream variables
+    let mediaRecorder;
+    let recordedChunks = [];
+    let videoBlob = null;
+    
+    // Generate RGB color bars pattern
+    function generateRGBPattern() {
+      const width = testCanvas.width;
+      const height = testCanvas.height;
+      const barWidth = width / 7;
+      
+      // Draw RGB bars
+      ctx.clearRect(0, 0, width, height);
+      
+      // White
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, barWidth, height);
+      
+      // Yellow
+      ctx.fillStyle = '#FFFF00';
+      ctx.fillRect(barWidth, 0, barWidth, height);
+      
+      // Cyan
+      ctx.fillStyle = '#00FFFF';
+      ctx.fillRect(barWidth * 2, 0, barWidth, height);
+      
+      // Green
+      ctx.fillStyle = '#00FF00';
+      ctx.fillRect(barWidth * 3, 0, barWidth, height);
+      
+      // Magenta
+      ctx.fillStyle = '#FF00FF';
+      ctx.fillRect(barWidth * 4, 0, barWidth, height);
+      
+      // Red
+      ctx.fillStyle = '#FF0000';
+      ctx.fillRect(barWidth * 5, 0, barWidth, height);
+      
+      // Blue
+      ctx.fillStyle = '#0000FF';
+      ctx.fillRect(barWidth * 6, 0, barWidth, height);
+      
+      // Add text labels
+      ctx.fillStyle = '#000';
+      ctx.font = '16px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('White', barWidth * 0.5, height - 10);
+      ctx.fillText('Yellow', barWidth * 1.5, height - 10);
+      ctx.fillText('Cyan', barWidth * 2.5, height - 10);
+      ctx.fillText('Green', barWidth * 3.5, height - 10);
+      ctx.fillText('Magenta', barWidth * 4.5, height - 10);
+      ctx.fillText('Red', barWidth * 5.5, height - 10);
+      ctx.fillText('Blue', barWidth * 6.5, height - 10);
+      
+      createVideoBtn.disabled = false;
+    }
+    
+    // Generate CMY test pattern
+    function generateCMYPattern() {
+      const width = testCanvas.width;
+      const height = testCanvas.height;
+      const barWidth = width / 4;
+      
+      ctx.clearRect(0, 0, width, height);
+      
+      // Draw full CMY bars (at 100% intensity)
+      ctx.fillStyle = '#00FFFF'; // Cyan
+      ctx.fillRect(0, 0, barWidth, height);
+      
+      ctx.fillStyle = '#FF00FF'; // Magenta
+      ctx.fillRect(barWidth, 0, barWidth, height);
+      
+      ctx.fillStyle = '#FFFF00'; // Yellow
+      ctx.fillRect(barWidth * 2, 0, barWidth, height);
+      
+      ctx.fillStyle = '#000000'; // Black
+      ctx.fillRect(barWidth * 3, 0, barWidth, height);
+      
+      // Add text labels
+      ctx.fillStyle = '#000';
+      ctx.font = '16px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Cyan (100%)', barWidth * 0.5, height - 10);
+      
+      ctx.fillStyle = '#000';
+      ctx.fillText('Magenta (100%)', barWidth * 1.5, height - 10);
+      
+      ctx.fillStyle = '#000';
+      ctx.fillText('Yellow (100%)', barWidth * 2.5, height - 10);
+      
+      ctx.fillStyle = '#FFF';
+      ctx.fillText('Black (K)', barWidth * 3.5, height - 10);
+      
+      createVideoBtn.disabled = false;
+    }
+    
+    // Generate color gradient pattern
+    function generateGradientPattern() {
+      const width = testCanvas.width;
+      const height = testCanvas.height;
+      
+      ctx.clearRect(0, 0, width, height);
+      
+      // Create horizontal rainbow gradient
+      const gradient = ctx.createLinearGradient(0, 0, width, 0);
+      gradient.addColorStop(0, '#FF0000'); // Red
+      gradient.addColorStop(1/6, '#FF8000'); // Orange
+      gradient.addColorStop(2/6, '#FFFF00'); // Yellow
+      gradient.addColorStop(3/6, '#00FF00'); // Green
+      gradient.addColorStop(4/6, '#00FFFF'); // Cyan
+      gradient.addColorStop(5/6, '#0000FF'); // Blue
+      gradient.addColorStop(1, '#8000FF'); // Purple
+      
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, width, height);
+      
+      // Add info text
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.fillRect(width/2 - 100, height/2 - 40, 200, 60);
+      
+      ctx.fillStyle = '#000';
+      ctx.font = '16px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Continuous Color Gradient', width/2, height/2);
+      ctx.font = '12px Arial';
+      ctx.fillText('Test CMYK extraction on smooth transitions', width/2, height/2 + 20);
+      
+      createVideoBtn.disabled = false;
+    }
+    
+    // Create video from canvas
+    async function createVideo() {
+      try {
+        // Reset recorded chunks
+        recordedChunks = [];
+        
+        // Get canvas stream
+        const stream = testCanvas.captureStream(30); // 30fps
+        
+        // Create media recorder with WebM format
+        mediaRecorder = new MediaRecorder(stream, {
+          mimeType: 'video/webm;codecs=vp8,opus',
+          videoBitsPerSecond: 5000000 // 5 Mbps for quality
+        });
+        
+        // Handle data available event
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            recordedChunks.push(event.data);
+          }
+        };
+        
+        // Handle recording stop
+        mediaRecorder.onstop = () => {
+          // Create blob from recorded chunks
+          videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
+          
+          // Create URL for the blob
+          const videoURL = URL.createObjectURL(videoBlob);
+          
+          // Set video source
+          testVideo.src = videoURL;
+          testVideo.controls = true;
+          
+          // Enable download button
+          downloadBtn.disabled = false;
+        };
+        
+        // Start recording
+        mediaRecorder.start();
+        
+        // Record for 5 seconds
+        setTimeout(() => {
+          if (mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+          }
+        }, 5000);
+        
+        // Change button text to show recording in progress
+        createVideoBtn.textContent = 'Recording...';
+        createVideoBtn.disabled = true;
+        
+        // Reset button after recording
+        setTimeout(() => {
+          createVideoBtn.textContent = 'Create Video';
+          createVideoBtn.disabled = false;
+        }, 5000);
+        
+      } catch (error) {
+        console.error('Error creating video:', error);
+        alert('Error creating video: ' + error.message);
+        createVideoBtn.textContent = 'Create Video';
+        createVideoBtn.disabled = false;
+      }
+    }
+    
+    // Download video
+    function downloadVideo() {
+      if (!videoBlob) {
+        alert('No video available to download.');
+        return;
+      }
+      
+      // Create a download link
+      const downloadLink = document.createElement('a');
+      downloadLink.href = URL.createObjectURL(videoBlob);
+      
+      // Set the filename
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      downloadLink.download = `cmyk-test-${timestamp}.webm`;
+      
+      // Trigger the download
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+    }
+    
+    // Set up event listeners
+    generateRGBBtn.addEventListener('click', generateRGBPattern);
+    generateCMYBtn.addEventListener('click', generateCMYPattern);
+    generateGradientBtn.addEventListener('click', generateGradientPattern);
+    createVideoBtn.addEventListener('click', createVideo);
+    downloadBtn.addEventListener('click', downloadVideo);
+    
+    // Generate RGB pattern on load
+    window.addEventListener('load', generateRGBPattern);
+  </script>
+</body>
+</html>

@@ -1,0 +1,154 @@
+Below is a comprehensive prompt designed to instruct an AI coding assistant in Visual Studio Code (e.g., GitHub Copilot, Cursor, or a similar tool) to fully develop the web app for video color channel extraction based on the CMYK model. The prompt incorporates the research findings, specifying the use of WebCodecs and WebGL for efficiency, while providing detailed requirements, structure, and guidance to ensure a complete, functional application. The goal is to balance performance, usability, and maintainability, leveraging modern web technologies as of March 23, 2025.
+Prompt for AI Coding Assistant in VSCode
+Objective:
+Develop a browser-based web application that allows users to upload a video file of any type, select one of three options (CMYK-C, CMYK-M, CMYK-Y) to perform a color channel extraction, process the video frame-by-frame, and display the result in real-time as a grayscale representation of the chosen channel. The app should be efficient, user-friendly, and built using modern web technologies.
+Requirements:  
+
+    User Interface:
+        An HTML file (index.html) with:
+            A file input for video upload (<input type="file" accept="video/*">).
+            A dropdown or radio buttons to select one of three options: "CMYK-C" (Cyan), "CMYK-M" (Magenta), "CMYK-Y" (Yellow).
+            A <video> element to display the original video.
+            A <canvas> element to display the processed grayscale output.
+            A "Process Video" button to start processing after selection.
+        Basic CSS for layout (e.g., flexbox or grid) and styling (clean, modern look).
+    Technology Stack:
+        Use WebCodecs API to decode the uploaded video into individual VideoFrame objects efficiently.
+        Use WebGL with shaders to perform GPU-accelerated RGB-to-CMYK conversion and channel extraction, rendering the result to the canvas.
+        Use JavaScript (ES6+) for control logic, event handling, and integration.
+        Optionally, use Web Workers to offload CPU-intensive tasks (e.g., frame queuing) if performance lags on the main thread.
+    Functionality:
+        Video Upload: Accept any browser-supported video format (e.g., MP4, WebM). Display an error if the format is unsupported.
+        Color Channel Extraction: Convert each frame’s RGB pixels to CMYK, extract the selected channel (C, M, or Y), and render it as grayscale (intensity = channel value × 255).
+        Real-Time Processing: Process and display frames at the video’s native frame rate (e.g., 30fps) with minimal latency.
+        Playback Control: Sync the processed output with the original video’s playback (play, pause, seek).
+    Performance Considerations:
+        Leverage WebGL’s GPU acceleration for pixel processing to handle high-resolution videos (e.g., 1080p).
+        Use WebCodecs for efficient decoding, avoiding container demuxing issues (assume raw video streams or rely on browser compatibility).
+        Optimize shader code for speed (e.g., minimize branching).
+        Provide a fallback message if WebGL or WebCodecs is unavailable in the browser.
+    File Structure:
+        index.html: Main HTML file.
+        styles.css: Stylesheet for UI.
+        app.js: Main JavaScript logic.
+        shaders.js: WebGL vertex and fragment shaders.
+        (Optional) worker.js: Web Worker for off-thread processing.
+    Error Handling:
+        Alert users if WebGL or WebCodecs is unsupported.
+        Handle video decoding errors gracefully (e.g., unsupported codec).
+        Ensure memory efficiency by closing VideoFrame objects after use.
+    Code Quality:
+        Use modular JavaScript with functions/classes for readability and maintainability.
+        Include comments explaining key logic (e.g., shader setup, CMYK conversion).
+        Follow modern JavaScript best practices (e.g., const, let, async/await).
+
+Detailed Instructions:  
+
+    Step 1: HTML Setup
+    Create index.html with a simple layout: file input, selection dropdown, video and canvas elements, and a button. Link styles.css and app.js.
+    Step 2: CSS Styling
+    In styles.css, use flexbox to arrange elements vertically or side-by-side. Style inputs, buttons, and video/canvas with borders and padding for clarity.
+    Step 3: JavaScript Logic (app.js)  
+        Initialize variables for the video element, canvas, WebGL context, and WebCodecs decoder.
+        Add an event listener for file input to load the video into the <video> element.
+        Implement a function to check WebGL and WebCodecs support, alerting if unavailable.
+        On "Process Video" button click:
+            Configure a VideoDecoder with the uploaded video’s codec (e.g., "vp8", "h264").
+            Decode frames into a ReadableStream of VideoFrame objects.
+            Pass frames to a WebGL pipeline for processing.
+        Sync playback with the original video using requestAnimationFrame.
+    Step 4: WebGL Setup (shaders.js)  
+        Define a vertex shader to pass texture coordinates unchanged.
+        Define a fragment shader to:
+            Sample RGB from the VideoFrame texture.
+            Convert RGB to CMYK using the formula:  
+                R' = R/255, G' = G/255, B' = B/255
+                  
+                K = 1 - \max(R', G', B')
+                  
+                C = (1 - R' - K) / (1 - K)
+                  
+                M = (1 - G' - K) / (1 - K)
+                  
+                Y = (1 - B' - K) / (1 - K)
+            Extract the selected channel (C, M, or Y) based on a uniform variable.
+            Output as grayscale (gl_FragColor = vec4(channel, channel, channel, 1.0)).
+        In app.js, initialize WebGL, compile shaders, and set up a texture from each VideoFrame.
+    Step 5: Processing Loop  
+        Use requestAnimationFrame to draw each processed frame to the canvas.
+        Update the uniform in the fragment shader based on the user’s channel selection.
+        Close each VideoFrame after rendering to free memory.
+    Step 6: Optional Web Worker  
+        If implemented, move VideoDecoder frame queuing to worker.js and transfer frames back to the main thread for WebGL rendering.
+
+Expected Output:
+A fully functional web app where users can upload a video, select a CMYK channel, and see the processed grayscale video in real-time alongside the original. The app should handle 1080p videos smoothly on modern hardware with WebGL-enabled browsers (e.g., Chrome, Edge).
+Starter Code (to scaffold):  
+html
+
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CMYK Video Channel Extractor</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>CMYK Video Channel Extractor</h1>
+    <input type="file" id="videoInput" accept="video/*">
+    <select id="channelSelect">
+      <option value="C">CMYK-C (Cyan)</option>
+      <option value="M">CMYK-M (Magenta)</option>
+      <option value="Y">CMYK-Y (Yellow)</option>
+    </select>
+    <button id="processBtn">Process Video</button>
+    <div class="video-container">
+      <video id="originalVideo" controls></video>
+      <canvas id="processedCanvas"></canvas>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
+
+css
+
+/* styles.css */
+.container { display: flex; flex-direction: column; align-items: center; padding: 20px; }
+.video-container { display: flex; gap: 20px; margin-top: 20px; }
+video, canvas { border: 1px solid #ccc; max-width: 640px; }
+button, select { margin: 10px; padding: 5px 10px; }
+
+javascript
+
+// app.js (partial)
+const videoInput = document.getElementById('videoInput');
+const channelSelect = document.getElementById('channelSelect');
+const processBtn = document.getElementById('processBtn');
+const originalVideo = document.getElementById('originalVideo');
+const canvas = document.getElementById('processedCanvas');
+const gl = canvas.getContext('webgl');
+
+if (!gl || !window.VideoDecoder) {
+  alert('WebGL or WebCodecs not supported in this browser.');
+}
+
+videoInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  originalVideo.src = URL.createObjectURL(file);
+});
+
+processBtn.addEventListener('click', () => {
+  // Start processing logic here
+});
+
+// WebGL and WebCodecs integration to be completed
+
+Guidance for AI Assistant:  
+
+    Build upon the starter code, filling in the WebGL shader setup, WebCodecs decoding, and processing loop.
+    Test the app with a sample MP4 video to ensure smooth playback at 30fps.
+    If stuck, refer to MDN WebGL docs,...
+

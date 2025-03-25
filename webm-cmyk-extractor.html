@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebM CMYK Channel Extractor</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background-color: #f8f9fa;
+      padding: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    h1, h2, h3 {
+      color: #2c3e50;
+    }
+    
+    .info-box {
+      background-color: #e8f4fc;
+      border-left: 4px solid #3498db;
+      padding: 12px 20px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    
+    .warning-box {
+      background-color: #fff3cd;
+      border-left: 4px solid #ffc107;
+      padding: 12px 20px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: flex-end;
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 200px;
+    }
+    
+    label {
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+    
+    select, input[type="file"] {
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    
+    button {
+      padding: 10px 20px;
+      background-color: #3498db;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      min-width: 150px;
+      transition: background-color 0.2s;
+    }
+    
+    button:hover {
+      background-color: #2980b9;
+    }
+    
+    button:disabled {
+      background-color: #95a5a6;
+      cursor: not-allowed;
+    }
+    
+    .video-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+    }
+    
+    .video-wrapper {
+      flex: 1;
+      min-width: 300px;
+      max-width: 640px;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    video, canvas {
+      width: 100%;
+      height: auto;
+      background-color: #000;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      aspect-ratio: 16 / 9;
+    }
+    
+    .status {
+      padding: 10px;
+      text-align: center;
+      font-weight: bold;
+      min-height: 40px;
+      color: #2c3e50;
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      .video-container {
+        flex-direction: column;
+        align-items: center;
+      }
+      
+      .video-wrapper {
+        max-width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>WebM CMYK Channel Extractor</h1>
+    
+    <div class="info-box">
+      <p><strong>Recommended Format:</strong> WebM (VP8/VP9)</p>
+      <p><strong>Instructions:</strong> Upload a video, select a CMYK channel, and click "Process Video" to extract that channel as grayscale.</p>
+    </div>
+    
+    <div class="warning-box">
+      <p><strong>Browser Compatibility Note:</strong> Your browser appears to better support WebM format videos rather than MP4. For best results, please use WebM format videos.</p>
+      <p><strong>Convert videos to WebM:</strong> You can use tools like <a href="https://cloudconvert.com/mp4-to-webm" target="_blank">CloudConvert</a> or <a href="https://ffmpeg.org/" target="_blank">FFmpeg</a> to convert videos to WebM format.</p>
+    </div>
+    
+    <div class="controls">
+      <div class="control-group">
+        <label for="videoInput">Upload Video:</label>
+        <input type="file" id="videoInput" accept="video/webm,video/mp4,video/ogg">
+      </div>
+      <div class="control-group">
+        <label for="channelSelect">Select Channel:</label>
+        <select id="channelSelect">
+          <option value="C">CMYK-C (Cyan)</option>
+          <option value="M">CMYK-M (Magenta)</option>
+          <option value="Y">CMYK-Y (Yellow)</option>
+        </select>
+      </div>
+      <button id="processBtn" disabled>Process Video</button>
+      <button id="enableBtn" style="background-color: #e67e22;">Enable Processing</button>
+    </div>
+    
+    <div class="video-container">
+      <div class="video-wrapper">
+        <h3>Original Video</h3>
+        <video id="originalVideo" controls></video>
+      </div>
+      <div class="video-wrapper">
+        <h3>Processed Output</h3>
+        <canvas id="processedCanvas"></canvas>
+      </div>
+    </div>
+    
+    <div id="status" class="status"></div>
+  </div>
+
+  <script>
+    // Application state
+    let isProcessing = false;
+    let gl = null;
+    let program = null;
+    let videoWidth = 0;
+    let videoHeight = 0;
+    let selectedChannel = 0; // 0: Cyan, 1: Magenta, 2: Yellow
+    
+    // DOM elements - will be initialized in init function
+    let videoInput;
+    let channelSelect;
+    let processBtn;
+    let originalVideo;
+    let canvas;
+    let statusElement;
+    
+    // Vertex shader - passes coordinates unchanged
+    const vertexShaderSource = `
+      attribute vec2 a_position;
+      attribute vec2 a_texCoord;
+      varying vec2 v_texCoord;
+      void main() {
+        gl_Position = vec4(a_position, 0, 1);
+        v_texCoord = a_texCoord;
+      }
+    `;
+    
+    // Fragment shader - converts RGB to CMYK and extracts the selected channel
+    const fragmentShaderSource = `
+      precision mediump float;
+      uniform sampler2D u_image;
+      uniform int u_channel;
+      varying vec2 v_texCoord;
+      
+      void main() {
+        vec4 color = texture2D(u_image, v_texCoord);
+        float r = color.r;
+        float g = color.g;
+        float b = color.b;
+        
+        // Convert RGB to CMYK
+        float k = 1.0 - max(max(r, g), b);
+        
+        // Calculate CMY (handle division by zero when k=1)
+        float c = k < 1.0 ? (1.0 - r - k) / (1.0 - k) : 0.0;
+        float m = k < 1.0 ? (1.0 - g - k) / (1.0 - k) : 0.0;
+        float y = k < 1.0 ? (1.0 - b - k) / (1.0 - k) : 0.0;
+        
+        // Extract the selected channel
+        float value = 0.0;
+        if (u_channel == 0) value = c;      // Cyan
+        else if (u_channel == 1) value = m; // Magenta
+        else if (u_channel == 2) value = y; // Yellow
+        
+        gl_FragColor = vec4(value, value, value, 1.0);
+      }
+    `;
+    
+    // Create and compile a shader
+    function createShader(gl, type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error('Shader compilation error:', gl.getShaderInfoLog(shader));
+        gl.deleteShader(shader);
+        return null;
+      }
+      
+      return shader;
+    }
+    
+    // Create program from shaders
+    function createProgram(gl, vertexShader, fragmentShader) {
+      const program = gl.createProgram();
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+      
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error('Program linking error:', gl.getProgramInfoLog(program));
+        return null;
+      }
+      
+      return program;
+    }
+    
+    // Update status message
+    function updateStatus(message, isError = false) {
+      statusElement.textContent = message;
+      statusElement.style.color = isError ? 'red' : '#2c3e50';
+      console.log(message);
+    }
+    
+    // Initialize WebGL
+    function initWebGL() {
+      // Try to get WebGL context
+      gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      
+      if (!gl) {
+        updateStatus('Error: WebGL is not supported by your browser.', true);
+        return false;
+      }
+      
+      // Compile shaders
+      const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+      const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+      
+      if (!vertexShader || !fragmentShader) {
+        updateStatus('Error: Failed to compile shaders.', true);
+        return false;
+      }
+      
+      // Create program
+      program = createProgram(gl, vertexShader, fragmentShader);
+      
+      if (!program) {
+        updateStatus('Error: Failed to link shader program.', true);
+        return false;
+      }
+      
+      // Set up vertex positions (full-screen quad)
+      const positionBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1.0, -1.0,  // bottom left
+         1.0, -1.0,  // bottom right
+        -1.0,  1.0,  // top left
+         1.0,  1.0,  // top right
+      ]), gl.STATIC_DRAW);
+      
+      // Set up texture coordinates
+      const texCoordBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        0.0, 0.0,  // bottom left
+        1.0, 0.0,  // bottom right
+        0.0, 1.0,  // top left
+        1.0, 1.0,  // top right
+      ]), gl.STATIC_DRAW);
+      
+      // Get locations of attributes and uniforms
+      program.positionLocation = gl.getAttribLocation(program, 'a_position');
+      program.texCoordLocation = gl.getAttribLocation(program, 'a_texCoord');
+      program.imageLocation = gl.getUniformLocation(program, 'u_image');
+      program.channelLocation = gl.getUniformLocation(program, 'u_channel');
+      
+      // Save buffers with the program for later use
+      program.positionBuffer = positionBuffer;
+      program.texCoordBuffer = texCoordBuffer;
+      
+      // Create and configure texture
+      const texture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      
+      // Fill with a single black pixel until we have a video
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+                    new Uint8Array([0, 0, 0, 255]));
+      
+      program.texture = texture;
+      
+      return true;
+    }
+    
+    // Handle video upload
+    function setupVideoUpload() {
+      videoInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        // Reset state
+        processBtn.disabled = true;
+        updateStatus(`Loading video: ${file.name}...`);
+        
+        // Log file info for debugging
+        console.log(`File selected: ${file.name}, Type: ${file.type}, Size: ${(file.size / (1024 * 1024)).toFixed(2)} MB`);
+        
+        // Display recommended format note
+        if (!file.type.includes('webm')) {
+          console.warn('Non-WebM format detected, video may not play correctly');
+        }
+        
+        // Create object URL and set as video source
+        const videoURL = URL.createObjectURL(file);
+        originalVideo.src = videoURL;
+        
+        // Set up error handling before setting source
+        originalVideo.addEventListener('error', (e) => {
+          console.error('Video error:', e);
+          let errorMessage = 'Failed to load video.';
+          
+          if (originalVideo.error) {
+            switch (originalVideo.error.code) {
+              case MediaError.MEDIA_ERR_ABORTED:
+                errorMessage = 'Video loading aborted.';
+                break;
+              case MediaError.MEDIA_ERR_NETWORK:
+                errorMessage = 'Network error while loading video.';
+                break;
+              case MediaError.MEDIA_ERR_DECODE:
+                errorMessage = 'Error decoding video. The format may be unsupported. Try converting to WebM format.';
+                break;
+              case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                errorMessage = 'Video format not supported by this browser. Please use WebM format.';
+                break;
+            }
+          }
+          
+          updateStatus(`Error: ${errorMessage}`, true);
+        }, { once: true });
+        
+        // Add multiple event listeners to catch when the video is ready
+        originalVideo.addEventListener('loadedmetadata', () => {
+          console.log('loadedmetadata event fired');
+          videoWidth = originalVideo.videoWidth;
+          videoHeight = originalVideo.videoHeight;
+          
+          console.log(`Video dimensions detected: ${videoWidth}x${videoHeight}`);
+          
+          if (videoWidth === 0 || videoHeight === 0) {
+            console.error('Zero dimensions detected');
+            updateStatus('Error: Could not detect video dimensions.', true);
+            return;
+          }
+          
+          // Set canvas size
+          canvas.width = videoWidth;
+          canvas.height = videoHeight;
+          
+          // Enable process button
+          processBtn.disabled = false;
+          updateStatus(`Video loaded: ${file.name} (${videoWidth}x${videoHeight})`);
+        }, { once: true });
+        
+        // Add canplay event as a backup to enable the button
+        originalVideo.addEventListener('canplay', () => {
+          console.log('canplay event fired');
+          
+          if (processBtn.disabled) {
+            // If dimensions are available, enable the button
+            if (originalVideo.videoWidth > 0 && originalVideo.videoHeight > 0) {
+              videoWidth = originalVideo.videoWidth;
+              videoHeight = originalVideo.videoHeight;
+              
+              // Update canvas dimensions if needed
+              if (canvas.width !== videoWidth || canvas.height !== videoHeight) {
+                canvas.width = videoWidth;
+                canvas.height = videoHeight;
+              }
+              
+              // Enable the button
+              processBtn.disabled = false;
+              updateStatus(`Video ready to process: ${file.name}`);
+              console.log('Process button enabled');
+            }
+          }
+        }, { once: true });
+        
+        // Also try the loadeddata event
+        originalVideo.addEventListener('loadeddata', () => {
+          console.log('loadeddata event fired');
+          // Same logic as canplay - enable button if dimensions are available
+          if (processBtn.disabled && originalVideo.videoWidth > 0 && originalVideo.videoHeight > 0) {
+            videoWidth = originalVideo.videoWidth;
+            videoHeight = originalVideo.videoHeight;
+            
+            canvas.width = videoWidth;
+            canvas.height = videoHeight;
+            
+            processBtn.disabled = false;
+            updateStatus(`Video loaded: ${file.name} (${videoWidth}x${videoHeight})`);
+            console.log('Process button enabled (from loadeddata)');
+          }
+        }, { once: true });
+        
+        // Set video attributes for better playback
+        originalVideo.muted = false; // Ensure audio is allowed (if any)
+        originalVideo.playsInline = true;
+        originalVideo.controls = true;
+      });
+    }
+    
+    // Handle channel selection
+    function setupChannelSelect() {
+      channelSelect.addEventListener('change', () => {
+        switch (channelSelect.value) {
+          case 'C': selectedChannel = 0; break; // Cyan
+          case 'M': selectedChannel = 1; break; // Magenta
+          case 'Y': selectedChannel = 2; break; // Yellow
+          default: selectedChannel = 0;
+        }
+        
+        // Update uniform if we're processing
+        if (isProcessing && gl && program) {
+          gl.uniform1i(program.channelLocation, selectedChannel);
+        }
+      });
+    }
+    
+    // Start processing
+    async function setupProcessButton() {
+      processBtn.addEventListener('click', async () => {
+        if (!gl || !program || !originalVideo.src) {
+          return;
+        }
+        
+        updateStatus('Starting video processing...');
+        
+        try {
+          // Start playback if needed
+          if (originalVideo.paused) {
+            try {
+              await originalVideo.play();
+            } catch (error) {
+              updateStatus('Error: Playback could not start. User interaction may be required.', true);
+              console.error('Play error:', error);
+              return;
+            }
+          }
+          
+          // Start processing
+          isProcessing = true;
+          processFrame();
+          
+          updateStatus(`Processing ${channelSelect.options[channelSelect.selectedIndex].text} channel...`);
+        } catch (error) {
+          console.error('Processing error:', error);
+          updateStatus(`Error: ${error.message}`, true);
+          isProcessing = false;
+        }
+      });
+    }
+    
+    // Process a video frame
+    function processFrame() {
+      if (!isProcessing || originalVideo.paused || originalVideo.ended) {
+        return;
+      }
+      
+      try {
+        // Set viewport size
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        
+        // Clear canvas
+        gl.clearColor(0, 0, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        
+        // Use shader program
+        gl.useProgram(program);
+        
+        // Set up position attribute
+        gl.bindBuffer(gl.ARRAY_BUFFER, program.positionBuffer);
+        gl.enableVertexAttribArray(program.positionLocation);
+        gl.vertexAttribPointer(program.positionLocation, 2, gl.FLOAT, false, 0, 0);
+        
+        // Set up texture coordinate attribute
+        gl.bindBuffer(gl.ARRAY_BUFFER, program.texCoordBuffer);
+        gl.enableVertexAttribArray(program.texCoordLocation);
+        gl.vertexAttribPointer(program.texCoordLocation, 2, gl.FLOAT, false, 0, 0);
+        
+        // Update texture with current video frame
+        gl.bindTexture(gl.TEXTURE_2D, program.texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, originalVideo);
+        
+        // Set uniforms
+        gl.uniform1i(program.imageLocation, 0);
+        gl.uniform1i(program.channelLocation, selectedChannel);
+        
+        // Draw the quad (actually, two triangles using TRIANGLE_STRIP)
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        
+        // Continue processing frames
+        requestAnimationFrame(processFrame);
+      } catch (error) {
+        console.error('Frame processing error:', error);
+        updateStatus(`Error processing frame: ${error.message}`, true);
+        isProcessing = false;
+      }
+    }
+    
+    // Setup playback control sync
+    function setupVideoEvents() {
+      originalVideo.addEventListener('play', () => {
+        if (!isProcessing && gl && program) {
+          isProcessing = true;
+          processFrame();
+        }
+      });
+      
+      originalVideo.addEventListener('pause', () => {
+        isProcessing = false;
+      });
+      
+      originalVideo.addEventListener('ended', () => {
+        isProcessing = false;
+        updateStatus('Video playback completed.');
+      });
+      
+      originalVideo.addEventListener('seeked', () => {
+        if (gl && program) {
+          // Redraw current frame after seeking
+          gl.bindTexture(gl.TEXTURE_2D, program.texture);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, originalVideo);
+          
+          // Force immediate redraw
+          processFrame();
+        }
+      });
+    }
+    
+    // Handle the manual enable button
+    function setupEnableButton() {
+      const enableBtn = document.getElementById('enableBtn');
+      
+      enableBtn.addEventListener('click', () => {
+        if (!originalVideo.src) {
+          updateStatus('Please upload a video first.', true);
+          return;
+        }
+        
+        // Force enable the process button
+        processBtn.disabled = false;
+        
+        // Set default canvas size if not already set
+        if (videoWidth === 0 || videoHeight === 0) {
+          // Try to get dimensions one more time
+          videoWidth = originalVideo.videoWidth || 640;
+          videoHeight = originalVideo.videoHeight || 360;
+          
+          // Set canvas size
+          canvas.width = videoWidth;
+          canvas.height = videoHeight;
+          
+          console.log(`Manual dimensions set: ${videoWidth}x${videoHeight}`);
+        }
+        
+        updateStatus(`Processing enabled manually. Click Process Video to start.`);
+      });
+    }
+    
+    // Initialize the application
+    function init() {
+      console.log('Initializing WebM CMYK Channel Extractor');
+      
+      // Initialize DOM element references
+      videoInput = document.getElementById('videoInput');
+      channelSelect = document.getElementById('channelSelect');
+      processBtn = document.getElementById('processBtn');
+      originalVideo = document.getElementById('originalVideo');
+      canvas = document.getElementById('processedCanvas');
+      statusElement = document.getElementById('status');
+      
+      updateStatus('Initializing...');
+      
+      if (!initWebGL()) {
+        return;
+      }
+      
+      setupVideoUpload();
+      setupChannelSelect();
+      setupProcessButton();
+      setupEnableButton();
+      setupVideoEvents();
+      
+      updateStatus('Ready. Please upload a video file.');
+      console.log('Initialization complete');
+    }
+    
+    // Run initialization when DOM is loaded
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

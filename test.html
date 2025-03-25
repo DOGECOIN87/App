@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMYK Video Extractor Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .test-container {
+      border: 1px solid #ccc;
+      padding: 20px;
+      margin-bottom: 20px;
+      background-color: #f8f9fa;
+    }
+    h1, h2 {
+      color: #2c3e50;
+    }
+    button {
+      padding: 10px 20px;
+      background-color: #3498db;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 10px 0;
+    }
+    #log {
+      background-color: #f5f5f5;
+      border: 1px solid #ddd;
+      padding: 10px;
+      height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>CMYK Video Extractor Diagnostic Page</h1>
+  
+  <div class="test-container">
+    <h2>1. Browser Capability Test</h2>
+    <div id="capability-results"></div>
+    <button id="test-capability">Test Browser Capabilities</button>
+  </div>
+  
+  <div class="test-container">
+    <h2>2. WebGL Test</h2>
+    <canvas id="test-canvas" width="400" height="300"></canvas>
+    <div id="webgl-results"></div>
+    <button id="test-webgl">Test WebGL</button>
+  </div>
+  
+  <div class="test-container">
+    <h2>3. Simple Video Loading Test</h2>
+    <video id="test-video" controls width="400" height="225">
+      <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
+      Your browser does not support the video tag.
+    </video>
+    <div id="video-results"></div>
+    <button id="test-video-load">Test Video Loading</button>
+  </div>
+  
+  <div class="test-container">
+    <h2>Console Log</h2>
+    <div id="log"></div>
+  </div>
+
+  <script>
+    // Redirect console logs to our custom log element
+    const logElement = document.getElementById('log');
+    const originalConsoleLog = console.log;
+    const originalConsoleError = console.error;
+    
+    console.log = function() {
+      originalConsoleLog.apply(console, arguments);
+      const args = Array.from(arguments);
+      logElement.innerHTML += '> ' + args.map(arg => 
+        typeof arg === 'object' ? JSON.stringify(arg) : arg
+      ).join(' ') + '\n';
+      logElement.scrollTop = logElement.scrollHeight;
+    };
+    
+    console.error = function() {
+      originalConsoleError.apply(console, arguments);
+      const args = Array.from(arguments);
+      logElement.innerHTML += '> ERROR: ' + args.map(arg => 
+        typeof arg === 'object' ? JSON.stringify(arg) : arg
+      ).join(' ') + '\n';
+      logElement.scrollTop = logElement.scrollHeight;
+    };
+    
+    console.log('Diagnostic page loaded at ' + new Date().toLocaleTimeString());
+    
+    // 1. Browser Capability Test
+    document.getElementById('test-capability').addEventListener('click', function() {
+      const resultElement = document.getElementById('capability-results');
+      resultElement.innerHTML = '';
+      
+      const capabilities = [
+        {name: 'WebGL', test: () => !!document.createElement('canvas').getContext('webgl')},
+        {name: 'Canvas', test: () => !!document.createElement('canvas').getContext('2d')},
+        {name: 'Video', test: () => !!document.createElement('video')},
+        {name: 'URL.createObjectURL', test: () => typeof URL.createObjectURL === 'function'},
+        {name: 'requestAnimationFrame', test: () => typeof requestAnimationFrame === 'function'}
+      ];
+      
+      console.log('Testing browser capabilities...');
+      
+      capabilities.forEach(cap => {
+        const supported = cap.test();
+        resultElement.innerHTML += `<div>${cap.name}: <strong style="color: ${supported ? 'green' : 'red'}">${supported ? 'Supported' : 'Not Supported'}</strong></div>`;
+        console.log(`${cap.name}: ${supported ? 'Supported' : 'Not Supported'}`);
+      });
+    });
+    
+    // 2. WebGL Test
+    document.getElementById('test-webgl').addEventListener('click', function() {
+      const canvas = document.getElementById('test-canvas');
+      const resultElement = document.getElementById('webgl-results');
+      resultElement.innerHTML = '';
+      
+      console.log('Testing WebGL...');
+      
+      try {
+        const gl = canvas.getContext('webgl');
+        if (!gl) {
+          throw new Error('WebGL not supported');
+        }
+        
+        // Clear to a blue color to show success
+        gl.clearColor(0.0, 0.0, 1.0, 1.0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        
+        resultElement.innerHTML = '<div style="color: green">WebGL is working correctly!</div>';
+        console.log('WebGL test successful');
+        
+        // Try creating a shader program to test that part
+        const vsSource = `
+          attribute vec4 aPosition;
+          void main() {
+            gl_Position = aPosition;
+          }
+        `;
+        
+        const fsSource = `
+          precision mediump float;
+          void main() {
+            gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0); // Red
+          }
+        `;
+        
+        // Compile and link the shaders
+        const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+        gl.shaderSource(vertexShader, vsSource);
+        gl.compileShader(vertexShader);
+        
+        if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+          throw new Error(`Vertex shader compilation failed: ${gl.getShaderInfoLog(vertexShader)}`);
+        }
+        
+        const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+        gl.shaderSource(fragmentShader, fsSource);
+        gl.compileShader(fragmentShader);
+        
+        if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+          throw new Error(`Fragment shader compilation failed: ${gl.getShaderInfoLog(fragmentShader)}`);
+        }
+        
+        const program = gl.createProgram();
+        gl.attachShader(program, vertexShader);
+        gl.attachShader(program, fragmentShader);
+        gl.linkProgram(program);
+        
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+          throw new Error(`Shader program linking failed: ${gl.getProgramInfoLog(program)}`);
+        }
+        
+        resultElement.innerHTML += '<div style="color: green">Shader compilation successful!</div>';
+        console.log('Shader test successful');
+        
+      } catch (error) {
+        resultElement.innerHTML = `<div style="color: red">WebGL Error: ${error.message}</div>`;
+        console.error('WebGL test failed:', error);
+      }
+    });
+    
+    // 3. Video Loading Test
+    document.getElementById('test-video-load').addEventListener('click', function() {
+      const video = document.getElementById('test-video');
+      const resultElement = document.getElementById('video-results');
+      resultElement.innerHTML = '';
+      
+      console.log('Testing video loading...');
+      
+      video.addEventListener('loadedmetadata', function onMetadataLoaded() {
+        console.log(`Video metadata loaded: ${video.videoWidth}x${video.videoHeight}`);
+        resultElement.innerHTML += `<div style="color: green">Video metadata loaded: ${video.videoWidth}x${video.videoHeight}</div>`;
+        video.removeEventListener('loadedmetadata', onMetadataLoaded);
+      });
+      
+      video.addEventListener('canplay', function onCanPlay() {
+        console.log('Video can play');
+        resultElement.innerHTML += '<div style="color: green">Video can play</div>';
+        video.removeEventListener('canplay', onCanPlay);
+      });
+      
+      video.addEventListener('error', function onError() {
+        console.error('Video error:', video.error);
+        resultElement.innerHTML += `<div style="color: red">Video Error: ${video.error ? video.error.message : 'Unknown error'}</div>`;
+        video.removeEventListener('error', onError);
+      });
+      
+      // Restart the video to trigger events
+      video.load();
+    });
+  </script>
+</body>
+</html>

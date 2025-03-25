@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMYK Video Channel Extractor</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>CMYK Video Channel Extractor</h1>
+    
+    <div class="info-box">
+      <p><strong>Supported Video Formats:</strong> MP4, WebM, Ogg</p>
+      <p><strong>Instructions:</strong> Upload a video, select a CMYK channel, and click "Process Video" to extract that channel as grayscale.</p>
+    </div>
+    
+    <div class="warning-box">
+      <p><strong>Browser Compatibility Note:</strong> Format compatibility will be detected automatically.</p>
+      <p><strong>Troubleshooting:</strong> If video loading fails, try the "Enable Processing" button or convert to a different format.</p>
+    </div>
+    
+    <div class="controls">
+      <div class="control-group">
+        <label for="videoInput">Upload Video:</label>
+        <input type="file" id="videoInput" accept="video/mp4,video/webm,video/ogg">
+      </div>
+      <div class="control-group">
+        <label for="channelSelect">Select Channel:</label>
+        <select id="channelSelect">
+          <option value="C">CMYK-C (Cyan)</option>
+          <option value="M">CMYK-M (Magenta)</option>
+          <option value="Y">CMYK-Y (Yellow)</option>
+        </select>
+      </div>
+      <button id="processBtn" disabled>Process Video</button>
+      <button id="enableBtn" style="background-color: #e67e22;">Enable Processing</button>
+    </div>
+    
+    <div class="video-container">
+      <div class="video-wrapper">
+        <h3>Original Video</h3>
+        <video id="originalVideo" controls crossorigin="anonymous" preload="metadata"></video>
+      </div>
+      <div class="video-wrapper">
+        <h3>Processed Output</h3>
+        <canvas id="processedCanvas"></canvas>
+      </div>
+    </div>
+    
+    <div id="status" class="status"></div>
+    
+    <div class="troubleshooting">
+      <h3>Troubleshooting</h3>
+      <ul>
+        <li>If your video doesn't load, check that it's in a supported format (MP4, WebM, Ogg)</li>
+        <li>Some browsers may have limitations with certain video codecs</li>
+        <li>You can check the browser console (F12) for detailed error messages</li>
+      </ul>
+    </div>
+  </div>
+  <script src="shaders.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

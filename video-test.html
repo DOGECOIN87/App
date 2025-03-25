@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Format Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      margin-bottom: 30px;
+      padding: 20px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+    h1, h2 {
+      color: #333;
+    }
+    video {
+      max-width: 100%;
+      border: 1px solid #ccc;
+    }
+    button {
+      padding: 8px 16px;
+      background-color: #4285f4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 10px 0;
+    }
+    .status {
+      margin-top: 10px;
+      padding: 10px;
+      background-color: #f8f9fa;
+      border-radius: 4px;
+    }
+    .success {
+      color: green;
+    }
+    .error {
+      color: red;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    table, th, td {
+      border: 1px solid #ddd;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    .supported {
+      background-color: #d4edda;
+    }
+    .not-supported {
+      background-color: #f8d7da;
+    }
+  </style>
+</head>
+<body>
+  <h1>Video Format Test</h1>
+  <p>This page will help determine which video formats your browser supports.</p>
+
+  <div class="container">
+    <h2>1. Video Format Support Detection</h2>
+    <table id="support-table">
+      <tr>
+        <th>Format</th>
+        <th>Support Status</th>
+        <th>Details</th>
+      </tr>
+      <tr id="mp4-row">
+        <td>MP4 (H.264)</td>
+        <td id="mp4-support">Checking...</td>
+        <td id="mp4-details"></td>
+      </tr>
+      <tr id="webm-row">
+        <td>WebM (VP8/VP9)</td>
+        <td id="webm-support">Checking...</td>
+        <td id="webm-details"></td>
+      </tr>
+      <tr id="ogg-row">
+        <td>Ogg (Theora)</td>
+        <td id="ogg-support">Checking...</td>
+        <td id="ogg-details"></td>
+      </tr>
+    </table>
+    <button id="check-support">Check Format Support</button>
+  </div>
+
+  <div class="container">
+    <h2>2. Sample Video Test</h2>
+    <p>Testing with a known public MP4 video:</p>
+    <video id="sample-video" controls>
+      <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" type="video/mp4">
+      Your browser does not support the video tag or MP4 format.
+    </video>
+    <div id="sample-status" class="status">Loading sample video...</div>
+  </div>
+
+  <div class="container">
+    <h2>3. Your Video Test</h2>
+    <p>Upload your own video file to test:</p>
+    <input type="file" id="video-input" accept="video/*">
+    <div>
+      <video id="uploaded-video" controls></video>
+    </div>
+    <div id="upload-status" class="status">Please select a video file.</div>
+  </div>
+
+  <div class="container">
+    <h2>4. Browser Information</h2>
+    <div id="browser-info"></div>
+  </div>
+
+  <script>
+    // Display browser information
+    function showBrowserInfo() {
+      const browserInfo = document.getElementById('browser-info');
+      browserInfo.innerHTML = `
+        <p><strong>User Agent:</strong> ${navigator.userAgent}</p>
+        <p><strong>Browser CodeName:</strong> ${navigator.appCodeName}</p>
+        <p><strong>Browser Name:</strong> ${navigator.appName}</p>
+        <p><strong>Browser Version:</strong> ${navigator.appVersion}</p>
+        <p><strong>Platform:</strong> ${navigator.platform}</p>
+      `;
+    }
+
+    // Check video format support
+    function checkVideoSupport() {
+      const videoEl = document.createElement('video');
+      
+      // Check MP4 support
+      const mp4Support = videoEl.canPlayType('video/mp4; codecs="avc1.42E01E, mp4a.40.2"');
+      const mp4SupportEl = document.getElementById('mp4-support');
+      const mp4DetailsEl = document.getElementById('mp4-details');
+      const mp4Row = document.getElementById('mp4-row');
+      
+      if (mp4Support === 'probably') {
+        mp4SupportEl.textContent = 'Supported';
+        mp4DetailsEl.textContent = 'Full support detected';
+        mp4Row.className = 'supported';
+      } else if (mp4Support === 'maybe') {
+        mp4SupportEl.textContent = 'Maybe';
+        mp4DetailsEl.textContent = 'Partial support (container format recognized but codec uncertain)';
+        mp4Row.className = 'supported';
+      } else {
+        mp4SupportEl.textContent = 'Not Supported';
+        mp4DetailsEl.textContent = 'This browser does not support MP4 videos';
+        mp4Row.className = 'not-supported';
+      }
+      
+      // Check WebM support
+      const webmSupport = videoEl.canPlayType('video/webm; codecs="vp8, vorbis"');
+      const webmSupportEl = document.getElementById('webm-support');
+      const webmDetailsEl = document.getElementById('webm-details');
+      const webmRow = document.getElementById('webm-row');
+      
+      if (webmSupport === 'probably') {
+        webmSupportEl.textContent = 'Supported';
+        webmDetailsEl.textContent = 'Full support detected';
+        webmRow.className = 'supported';
+      } else if (webmSupport === 'maybe') {
+        webmSupportEl.textContent = 'Maybe';
+        webmDetailsEl.textContent = 'Partial support (container format recognized but codec uncertain)';
+        webmRow.className = 'supported';
+      } else {
+        webmSupportEl.textContent = 'Not Supported';
+        webmDetailsEl.textContent = 'This browser does not support WebM videos';
+        webmRow.className = 'not-supported';
+      }
+      
+      // Check Ogg support
+      const oggSupport = videoEl.canPlayType('video/ogg; codecs="theora, vorbis"');
+      const oggSupportEl = document.getElementById('ogg-support');
+      const oggDetailsEl = document.getElementById('ogg-details');
+      const oggRow = document.getElementById('ogg-row');
+      
+      if (oggSupport === 'probably') {
+        oggSupportEl.textContent = 'Supported';
+        oggDetailsEl.textContent = 'Full support detected';
+        oggRow.className = 'supported';
+      } else if (oggSupport === 'maybe') {
+        oggSupportEl.textContent = 'Maybe';
+        oggDetailsEl.textContent = 'Partial support (container format recognized but codec uncertain)';
+        oggRow.className = 'supported';
+      } else {
+        oggSupportEl.textContent = 'Not Supported';
+        oggDetailsEl.textContent = 'This browser does not support Ogg videos';
+        oggRow.className = 'not-supported';
+      }
+    }
+
+    // Monitor sample video
+    function setupSampleVideo() {
+      const video = document.getElementById('sample-video');
+      const statusEl = document.getElementById('sample-status');
+      
+      video.addEventListener('loadeddata', () => {
+        statusEl.textContent = `Sample video loaded successfully (${video.videoWidth}x${video.videoHeight})`;
+        statusEl.className = 'status success';
+      });
+      
+      video.addEventListener('error', (e) => {
+        let errorMessage = 'Failed to load sample video.';
+        if (video.error) {
+          switch (video.error.code) {
+            case MediaError.MEDIA_ERR_ABORTED:
+              errorMessage = 'Video loading aborted.';
+              break;
+            case MediaError.MEDIA_ERR_NETWORK:
+              errorMessage = 'Network error while loading video.';
+              break;
+            case MediaError.MEDIA_ERR_DECODE:
+              errorMessage = 'Error decoding video. The format may be unsupported.';
+              break;
+            case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+              errorMessage = 'Video format not supported by this browser.';
+              break;
+          }
+        }
+        statusEl.textContent = `Error: ${errorMessage}`;
+        statusEl.className = 'status error';
+        console.error('Video error:', video.error);
+      });
+    }
+
+    // Handle user video upload
+    function setupFileUpload() {
+      const fileInput = document.getElementById('video-input');
+      const video = document.getElementById('uploaded-video');
+      const statusEl = document.getElementById('upload-status');
+      
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        statusEl.textContent = `Loading ${file.name}...`;
+        statusEl.className = 'status';
+        
+        // Record the file's reported type
+        console.log(`File selected: ${file.name}, Size: ${(file.size / (1024 * 1024)).toFixed(2)} MB, Type: ${file.type}`);
+        
+        const url = URL.createObjectURL(file);
+        video.src = url;
+        
+        video.addEventListener('loadedmetadata', () => {
+          statusEl.textContent = `Video loaded: ${file.name} (${video.videoWidth}x${video.videoHeight}, ${file.type})`;
+          statusEl.className = 'status success';
+          console.log(`Video loaded successfully: ${video.videoWidth}x${video.videoHeight}`);
+        });
+        
+        video.addEventListener('error', (e) => {
+          let errorMessage = 'Failed to load video.';
+          if (video.error) {
+            switch (video.error.code) {
+              case MediaError.MEDIA_ERR_ABORTED:
+                errorMessage = 'Video loading aborted.';
+                break;
+              case MediaError.MEDIA_ERR_NETWORK:
+                errorMessage = 'Network error while loading video.';
+                break;
+              case MediaError.MEDIA_ERR_DECODE:
+                errorMessage = 'Error decoding video. The format may be unsupported.';
+                break;
+              case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                errorMessage = 'Video format not supported by this browser.';
+                break;
+            }
+          }
+          statusEl.textContent = `Error: ${errorMessage}`;
+          statusEl.className = 'status error';
+          console.error('Video error:', video.error);
+        });
+      });
+    }
+
+    // Initialize the page
+    document.addEventListener('DOMContentLoaded', () => {
+      showBrowserInfo();
+      setupSampleVideo();
+      setupFileUpload();
+      
+      document.getElementById('check-support').addEventListener('click', checkVideoSupport);
+      
+      // Check support immediately too
+      checkVideoSupport();
+    });
+  </script>
+</body>
+</html>

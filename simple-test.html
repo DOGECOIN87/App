@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple CMYK Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .video-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    video, canvas {
+      max-width: 400px;
+      border: 1px solid #ccc;
+    }
+    button {
+      padding: 10px 20px;
+      background-color: #3498db;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    #status {
+      background-color: #f8f9fa;
+      padding: 10px;
+      border-radius: 4px;
+      min-height: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Simple CMYK Channel Extractor</h1>
+    
+    <div>
+      <p>This is a simplified version to test basic functionality.</p>
+      <input type="file" id="videoInput" accept="video/mp4,video/webm,video/ogg">
+      <select id="channelSelect">
+        <option value="C">Cyan</option>
+        <option value="M">Magenta</option>
+        <option value="Y">Yellow</option>
+      </select>
+      <button id="processBtn" disabled>Process</button>
+    </div>
+    
+    <div class="video-container">
+      <div>
+        <h3>Original Video</h3>
+        <video id="originalVideo" controls></video>
+      </div>
+      <div>
+        <h3>Processed Output</h3>
+        <canvas id="processedCanvas"></canvas>
+      </div>
+    </div>
+    
+    <div id="status"></div>
+  </div>
+
+  <script>
+    // Application state
+    let isProcessing = false;
+    let gl = null;
+    let program = null;
+    let videoWidth = 0;
+    let videoHeight = 0;
+    let selectedChannel = 0; // 0: Cyan, 1: Magenta, 2: Yellow
+    
+    // DOM elements
+    const videoInput = document.getElementById('videoInput');
+    const channelSelect = document.getElementById('channelSelect');
+    const processBtn = document.getElementById('processBtn');
+    const originalVideo = document.getElementById('originalVideo');
+    const canvas = document.getElementById('processedCanvas');
+    const statusElement = document.getElementById('status');
+    
+    // Vertex shader - just passes through the position and texture coordinates
+    const vertexShaderSource = `
+      attribute vec2 a_position;
+      attribute vec2 a_texCoord;
+      varying vec2 v_texCoord;
+      void main() {
+        gl_Position = vec4(a_position, 0, 1);
+        v_texCoord = a_texCoord;
+      }
+    `;
+    
+    // Fragment shader - converts RGB to CMYK and extracts the selected channel
+    const fragmentShaderSource = `
+      precision mediump float;
+      uniform sampler2D u_image;
+      uniform int u_channel;
+      varying vec2 v_texCoord;
+      
+      void main() {
+        vec4 color = texture2D(u_image, v_texCoord);
+        float r = color.r;
+        float g = color.g;
+        float b = color.b;
+        
+        // Convert RGB to CMYK
+        float k = 1.0 - max(max(r, g), b);
+        
+        // Calculate CMY (handle division by zero when k=1)
+        float c = k < 1.0 ? (1.0 - r - k) / (1.0 - k) : 0.0;
+        float m = k < 1.0 ? (1.0 - g - k) / (1.0 - k) : 0.0;
+        float y = k < 1.0 ? (1.0 - b - k) / (1.0 - k) : 0.0;
+        
+        // Extract the selected channel
+        float value = 0.0;
+        if (u_channel == 0) value = c;      // Cyan
+        else if (u_channel == 1) value = m; // Magenta
+        else if (u_channel == 2) value = y; // Yellow
+        
+        gl_FragColor = vec4(value, value, value, 1.0);
+      }
+    `;
+    
+    // Create and compile a shader
+    function createShader(gl, type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error('Shader compilation error:', gl.getShaderInfoLog(shader));
+        gl.deleteShader(shader);
+        return null;
+      }
+      
+      return shader;
+    }
+    
+    // Create program from shaders
+    function createProgram(gl, vertexShader, fragmentShader) {
+      const program = gl.createProgram();
+      gl.attachShader(program, vertexShader);
+      gl.attachShader(program, fragmentShader);
+      gl.linkProgram(program);
+      
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        console.error('Program linking error:', gl.getProgramInfoLog(program));
+        return null;
+      }
+      
+      return program;
+    }
+    
+    // Initialize WebGL
+    function initGL() {
+      gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      
+      if (!gl) {
+        updateStatus('WebGL not supported by your browser.', true);
+        return false;
+      }
+      
+      // Create shader program
+      const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+      const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+      
+      if (!vertexShader || !fragmentShader) {
+        updateStatus('Failed to compile shaders.', true);
+        return false;
+      }
+      
+      program = createProgram(gl, vertexShader, fragmentShader);
+      
+      if (!program) {
+        updateStatus('Failed to link shader program.', true);
+        return false;
+      }
+      
+      // Create vertex buffer for a rectangle covering the canvas
+      const positionBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1.0, -1.0,  // bottom left
+         1.0, -1.0,  // bottom right
+        -1.0,  1.0,  // top left
+         1.0,  1.0,  // top right
+      ]), gl.STATIC_DRAW);
+      
+      // Create texture coordinate buffer
+      const texCoordBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        0.0, 0.0,  // bottom left
+        1.0, 0.0,  // bottom right
+        0.0, 1.0,  // top left
+        1.0, 1.0,  // top right
+      ]), gl.STATIC_DRAW);
+      
+      // Cache attribute locations
+      program.positionAttribute = gl.getAttribLocation(program, 'a_position');
+      program.texCoordAttribute = gl.getAttribLocation(program, 'a_texCoord');
+      program.imageUniform = gl.getUniformLocation(program, 'u_image');
+      program.channelUniform = gl.getUniformLocation(program, 'u_channel');
+      
+      // Create and configure texture
+      program.texture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, program.texture);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      
+      // Fill with a black pixel until we have a video frame
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+                    new Uint8Array([0, 0, 0, 255]));
+      
+      // Store buffer references in program for convenience
+      program.positionBuffer = positionBuffer;
+      program.texCoordBuffer = texCoordBuffer;
+      
+      return true;
+    }
+    
+    // Update status message
+    function updateStatus(message, isError = false) {
+      statusElement.textContent = message;
+      statusElement.style.color = isError ? 'red' : 'black';
+      console.log(message);
+    }
+    
+    // Handle video upload
+    videoInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      const url = URL.createObjectURL(file);
+      originalVideo.src = url;
+      
+      updateStatus('Loading video...');
+      
+      // Handle video metadata loaded
+      originalVideo.onloadedmetadata = () => {
+        videoWidth = originalVideo.videoWidth;
+        videoHeight = originalVideo.videoHeight;
+        
+        // Set canvas size to match video
+        canvas.width = videoWidth;
+        canvas.height = videoHeight;
+        
+        processBtn.disabled = false;
+        updateStatus(`Video loaded: ${videoWidth}x${videoHeight}`);
+      };
+      
+      originalVideo.onerror = () => {
+        updateStatus('Failed to load video.', true);
+        processBtn.disabled = true;
+      };
+    });
+    
+    // Handle channel selection
+    channelSelect.addEventListener('change', () => {
+      switch (channelSelect.value) {
+        case 'C': selectedChannel = 0; break;
+        case 'M': selectedChannel = 1; break;
+        case 'Y': selectedChannel = 2; break;
+      }
+      
+      if (isProcessing) {
+        // Update uniform if we're already processing
+        gl.uniform1i(program.channelUniform, selectedChannel);
+      }
+    });
+    
+    // Process video frames
+    function processFrame() {
+      if (!isProcessing) return;
+      
+      try {
+        // Resize viewport if needed
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        
+        // Clear canvas
+        gl.clearColor(0, 0, 0, 1);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        
+        // Use our shader program
+        gl.useProgram(program);
+        
+        // Set up position attribute
+        gl.bindBuffer(gl.ARRAY_BUFFER, program.positionBuffer);
+        gl.enableVertexAttribArray(program.positionAttribute);
+        gl.vertexAttribPointer(program.positionAttribute, 2, gl.FLOAT, false, 0, 0);
+        
+        // Set up texture coordinate attribute
+        gl.bindBuffer(gl.ARRAY_BUFFER, program.texCoordBuffer);
+        gl.enableVertexAttribArray(program.texCoordAttribute);
+        gl.vertexAttribPointer(program.texCoordAttribute, 2, gl.FLOAT, false, 0, 0);
+        
+        // Update texture with current video frame
+        gl.bindTexture(gl.TEXTURE_2D, program.texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, originalVideo);
+        
+        // Set uniforms
+        gl.uniform1i(program.imageUniform, 0);
+        gl.uniform1i(program.channelUniform, selectedChannel);
+        
+        // Draw the rectangle
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        
+        // Schedule next frame
+        requestAnimationFrame(processFrame);
+        
+      } catch (e) {
+        console.error('Error processing frame:', e);
+        updateStatus('Error processing video: ' + e.message, true);
+        isProcessing = false;
+      }
+    }
+    
+    // Handle process button click
+    processBtn.addEventListener('click', async () => {
+      if (!gl || isProcessing) return;
+      
+      try {
+        // Start playback if needed
+        if (originalVideo.paused) {
+          await originalVideo.play();
+        }
+        
+        isProcessing = true;
+        updateStatus('Processing video...');
+        
+        // Start processing frames
+        processFrame();
+        
+      } catch (e) {
+        console.error('Error starting processing:', e);
+        updateStatus('Error: ' + e.message, true);
+      }
+    });
+    
+    // Handle playback events
+    originalVideo.addEventListener('play', () => {
+      if (!isProcessing) {
+        isProcessing = true;
+        processFrame();
+      }
+    });
+    
+    originalVideo.addEventListener('pause', () => {
+      isProcessing = false;
+    });
+    
+    originalVideo.addEventListener('ended', () => {
+      isProcessing = false;
+      updateStatus('Video playback completed.');
+    });
+    
+    // Initialize when page loads
+    document.addEventListener('DOMContentLoaded', () => {
+      updateStatus('Initializing...');
+      
+      if (initGL()) {
+        updateStatus('Ready. Please upload a video.');
+      }
+    });
+  </script>
+</body>
+</html>
